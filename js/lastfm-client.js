@@ -1,5 +1,4 @@
 var labelType, useGradients, nativeTextSupport, animate;
-var tm;
 
 (function() {
   var ua = navigator.userAgent,
@@ -27,7 +26,8 @@ var Log = {
 };
 /** Global variables */
 var albumCount = 0;
-var artistName = "madonna";
+var artistName = "Paul Van Dyk";
+var tm;
 
 var json = { "children": [
     
@@ -35,7 +35,7 @@ var json = { "children": [
   "data": {
   },
   "id": "root",
-  "name": "Favourite Artists"
+  "name": artistName + " Top Albums"
 };
 
 /* Create a cache object */
@@ -51,73 +51,142 @@ var json = { "children": [
 
 function init() {
 
+  document.getElementById("loading").className = "loading-visible";
+
+  if(!tm){
+    initTreemap();
+  }
  /* Load some artist info. */
   lastfm.artist.getTopAlbums({artist: artistName}, {success: parseTopAlbums, error:errorHandler });
 
 };
 
 function errorHandler(code, message) {
-  $("#output").append("Error code:" + code + ". " + message + "<br />");
+  $("#log").append("Error code:" + code + ". " + message + "<br />");
 };
 
 function parseAlbumInfo(albumInfo){
-
-
-  $("#output").append(albumInfo.album.playcount + "<br />");
+  //$("#output").append(albumInfo.album.playcount + "<br />");
   
   json.children[albumCount].data["$area"] = albumInfo.album.playcount;
+  json.children[albumCount].data["$color"] = calculateColor(albumInfo.album.playcount, albumInfo.album.listeners);
+
   json.children[albumCount].data.playcount = albumInfo.album.playcount;
+  json.children[albumCount].data.listeners = albumInfo.album.listeners;
   
   if(albumInfo.album.image.length > 0){
     json.children[albumCount].data.image = albumInfo.album.image[0]["#text"];
   }
-  
-  albumCount++;
-  if(albumCount == json.children.length){
-    initTreemap();
-  }               
-   
+  if(++albumCount == json.children.length){
+     treeMapLoadJSON();
+  }
+
 };
 
+function calculateColor(playcount, listeners) {
+
+ var ratio = Math.floor(playcount / listeners);
+ 
+if(ratio <= 2){
+    return "#FFFFCC";
+}
+if(ratio <= 4){
+    return "#C7E9B4";
+}
+if(ratio <= 6){
+    return "#7FCDBB";
+}
+if(ratio <= 8){
+    return "#41B6C4";
+}
+if(ratio <= 10){
+    return "#2C7FB8";
+}
+return "#253494";
+
+
+
+ //if(ratio > 0 && ratio < 5){
+ //   return "#FDE0DD";    
+ //} else if(playcount > 50001 && playcount < 100000){
+ //   return "#FA9FB5";
+ //} else {
+ //   return "#C51B8A";
+// }
+}
 
 function parseAlbum(i, album){
 
-  $("#output").append(album.name + "<br />");
-  $("#output").append(encodeURIComponent(album.name) + "<br />");
-
+  //$("#output").append(album.name + "<br />");
+  
   lastfm.album.getInfo({artist: artistName, album: album.name}, {success: parseAlbumInfo, error:errorHandler });
 
-  var jsonAlbum = { "children": [
-                        ],
-                        "data": {
-                          "playcount": "276",
-                          "$color": "#8E7032",
-                          "image": "http://userserve-ak.last.fm/serve/300x300/11403219.jpg",
-                          "$area": 100
-                        },
-                        "id": album.name,
-                        "name": album.name
-                    };
+  var imageURL;
 
-  json.children[json.children.length] = jsonAlbum;
+  if(album != undefined && album.name != undefined && album.playcount != undefined ){
+
+    if(album.image.length > 0){
+        imageURL = album.image[album.image.length - 1]["#text"];
+      }
+
+      var jsonAlbum = { "children": [
+                            ],
+                            "data": {
+                              "playcount": album.playcount,
+                              "listeners": 0,
+                              "$color": "#FDE0DD",
+                              "image": imageURL,
+                              "$area": album.playcount
+                            },
+                            "id": album.name,
+                            "name": album.name
+                        };
+
+      json.children[json.children.length] = jsonAlbum;
+  }
   
-  console.log(json);                  
-};
+  
+  console.log(json);   
 
+  // if(albumCount == json.children.length){
+  //   treeMapLoadJSON();
+  // }
+
+};
+/**
+ *
+ *
+ */
 function parseTopAlbums(data){
+ 
+  if(data.topalbums.album){
 
-    if(data.topalbums.album){
+    /** Cheks if there are just one album*/
+    if(data.topalbums.album.length != undefined){
+      //albumCount = data.topalbums.album.length;
       jQuery.each(data.topalbums.album, parseAlbum);
+
+    }else{
+      //albumCount = 1;
+      parseAlbum(0, data.topalbums.album);
     }
+  }else{
+      $("#output").append("No albums for " + artistName + "<br />");
+  }
 
 };
+
+function treeMapLoadJSON(){
+  tm.loadJSON(json);
+  tm.refresh();
+  document.getElementById("loading").className = "loading-invisible";
+}
 
 function initTreemap(){
   
   //end
   //init TreeMap
-  if(tm == null){
-    tm = new $jit.TM.Squarified({
+  tm = new $jit.TM.Squarified({
     //where to inject the visualization
     injectInto: 'infovis',
     //parent box title heights
@@ -151,7 +220,10 @@ function initTreemap(){
           + "</div><div class=\"tip-text\">";
         var data = node.data;
         if(data.playcount) {
-          html += "play count: " + data.playcount;
+          html += "play count: " + data.playcount + " <br />";
+        }
+        if(data.listeners) {
+          html += " listeners count: " + data.listeners;
         }
         if(data.image) {
           html += "<img src=\""+ data.image +"\" class=\"album\" />";
@@ -174,9 +246,8 @@ function initTreemap(){
         };
     }
   });
-  }
-  tm.loadJSON(json);
-  tm.refresh();
+  // tm.loadJSON(json);
+  // tm.refresh();
   //end
   //add events to radio buttons
   var sq = $jit.id('r-sq'),
@@ -208,16 +279,20 @@ function initTreemap(){
 }
 
 function onChangeArtist(){
-	json = { "children": [
+  var text = document.getElementById('artist');
+  //$("#output").append(text.value + "<br />");
+  
+  artistName = text.value;
+  albumCount = 0;
 
-	  ],
-	  "data": {
-	  },
-	  "id": "root",
-	  "name": "Favourite Artists"
-	};
-	var text = document.getElementById('artist');
-	alert(text.value);
-	artistName = text.value;
-	init();
+  json = { "children": [
+    
+  ],
+  "data": {
+  },
+  "id": "root",
+  "name": artistName + " Top Albums"
+};
+
+  init();
 }
